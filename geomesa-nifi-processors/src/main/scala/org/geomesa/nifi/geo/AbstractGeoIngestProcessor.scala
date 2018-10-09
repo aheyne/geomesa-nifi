@@ -24,7 +24,7 @@ import org.geomesa.nifi.geo.AbstractGeoIngestProcessor.Relationships._
 import org.geomesa.nifi.geo.validators.{ConverterValidator, SimpleFeatureTypeValidator}
 import org.geotools.data.{DataStore, DataUtilities, FeatureWriter, Transaction}
 import org.geotools.filter.identity.FeatureIdImpl
-import org.locationtech.geomesa.convert.{ConfArgs, ConverterConfigLoader, ConverterConfigResolver}
+import org.locationtech.geomesa.convert.{ConfArgs, ConverterConfigLoader, ConverterConfigResolver, EvaluationContext}
 import org.locationtech.geomesa.convert2.SimpleFeatureConverter
 import org.locationtech.geomesa.features.avro.AvroDataFileReader
 import org.locationtech.geomesa.utils.geotools.{SftArgResolver, SftArgs, SimpleFeatureTypeLoader}
@@ -57,8 +57,10 @@ abstract class AbstractGeoIngestProcessor extends AbstractProcessor {
   override def getRelationships = relationships
   override def getSupportedPropertyDescriptors = descriptors
 
+  case class ConverterContext(simpleFeatureConverter: SimpleFeatureConverter, evaluationContext: EvaluationContext)
+
   @volatile
-  protected var converterPool: ObjectPool[SimpleFeatureConverter] = _
+  protected var converterPool: ObjectPool[ConverterContext] = _
 
   @volatile
   protected var sft: SimpleFeatureType = null
@@ -69,9 +71,9 @@ abstract class AbstractGeoIngestProcessor extends AbstractProcessor {
   @volatile
   protected var dataStore: DataStore = null
 
-
   @OnScheduled
   protected def initialize(context: ProcessContext): Unit = {
+    println("*** CALLING GEOMESA PROCESSOR INITIALIZE")
     // Data store comes first...then getSft because
     // oddly enough sometimes you want to modify the sft
     dataStore = getDataStore(context)
@@ -96,10 +98,13 @@ abstract class AbstractGeoIngestProcessor extends AbstractProcessor {
       case Right(conf) => conf
     }
 
-    converterPool = new GenericObjectPool[SimpleFeatureConverter](
-      new BasePooledObjectFactory[SimpleFeatureConverter] {
-        override def create(): SimpleFeatureConverter = SimpleFeatureConverter(sft, config)
-        override def wrap(obj: SimpleFeatureConverter): PooledObject[SimpleFeatureConverter] = new DefaultPooledObject[SimpleFeatureConverter](obj)
+    converterPool = new GenericObjectPool[ConverterContext](
+      new BasePooledObjectFactory[ConverterContext] {
+        override def create(): ConverterContext = {
+          val sfc = SimpleFeatureConverter(sft, config)
+          ConverterContext(sfc, sfc.createEvaluationContext())
+        }
+        override def wrap(obj: ConverterContext): PooledObject[ConverterContext] = new DefaultPooledObject[ConverterContext](obj)
       })
   }
 
@@ -205,7 +210,9 @@ abstract class AbstractGeoIngestProcessor extends AbstractProcessor {
   protected def converterIngester(fw: SFW): ProcessFn =
     (context: ProcessContext, session: ProcessSession, flowFile: FlowFile) => {
       getLogger.debug("Running converter based ingest")
-      val converter = converterPool.borrowObject()
+      val converterContext = converterPool.borrowObject()
+      val converter = converterContext.simpleFeatureConverter
+      val ec = converterContext.evaluationContext
       try {
         val fullFlowFileName = fullName(flowFile)
         val ec = converter.createEvaluationContext(Map("inputFilePath" -> fullFlowFileName))
@@ -229,7 +236,7 @@ abstract class AbstractGeoIngestProcessor extends AbstractProcessor {
         getLogger.debug(s"Converted and ingested file $fullFlowFileName with ${ec.counter.getSuccess} successes and " +
           s"${ec.counter.getFailure} failures")
       } finally {
-        converterPool.returnObject(converter)
+        converterPool.returnObject(converterContext)
       }
     }
 }

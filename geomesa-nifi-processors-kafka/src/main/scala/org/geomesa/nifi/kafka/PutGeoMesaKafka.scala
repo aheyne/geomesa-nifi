@@ -41,6 +41,7 @@ class PutGeoMesaKafka extends AbstractGeoIngestProcessor {
 
   // Abstract
   override protected def getDataStore(context: ProcessContext): DataStore = {
+    println("*** GETTING A NEW KDS ****")
     val props = KdsNifiProps.map { p =>
       p.getName -> context.getProperty(p.getName).getValue
     }.filter(_._2 != null).map { case (p, v) =>
