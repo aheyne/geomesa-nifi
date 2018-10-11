@@ -215,7 +215,6 @@ abstract class AbstractGeoIngestProcessor extends AbstractProcessor {
       val ec = converterContext.evaluationContext
       try {
         val fullFlowFileName = fullName(flowFile)
-        val ec = converter.createEvaluationContext(Map("inputFilePath" -> fullFlowFileName))
         session.read(flowFile, new InputStreamCallback {
           override def process(in: InputStream): Unit = {
             getLogger.info(s"Converting path $fullFlowFileName")
