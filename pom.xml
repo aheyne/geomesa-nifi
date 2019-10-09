@@ -85,9 +85,9 @@
     </properties>
 
     <scm>
-        <connection>scm:git:git@github.com:geomesa/geomesa-nifi.git</connection>
-        <developerConnection>scm:git:git@github.com:geomesa/geomesa-nifi.git</developerConnection>
-        <url>https://github.com/geomesa/geomesa-nifi</url>
+        <connection>scm:git:git@git.ccri.com:optix/optix-external/geomesa-nifi.git</connection>
+        <developerConnection>scm:git:git@git.ccri.com:optix/optix-external/geomesa-nifi.git</developerConnection>
+        <url>https://git.ccri.com/optix/optix-external/geomesa-nifi</url>
         <tag>HEAD</tag>
     </scm>
 
